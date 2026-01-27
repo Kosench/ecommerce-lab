@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/Kosench/ecommerce-lab/internal/model"
@@ -60,7 +61,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.orderService.CreateOrder(r.Context(), req.UserID, items)
 	if err != nil {
-		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf(`{"error": "%s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 

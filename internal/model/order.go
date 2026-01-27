@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -57,7 +58,7 @@ func NewOrder(userID string, items []OrderItem) (*Order, error) {
 
 	now := time.Now()
 	return &Order{
-		ID:        "",
+		ID:        uuid.NewString(),
 		UserID:    userID,
 		Items:     items,
 		Status:    StatusPending,

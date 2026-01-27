@@ -22,7 +22,7 @@ func NewOrderService(orderRepo repository.OrderRepository) OrderService {
 
 func (s *orderService) CreateOrder(ctx context.Context, userID string, items []model.OrderItem) (*model.Order, error) {
 	if userID == "" {
-		return nil, errors.New("invalid user_id")
+		return nil, errors.New("user_id is required")
 	}
 
 	order, err := model.NewOrder(userID, items)

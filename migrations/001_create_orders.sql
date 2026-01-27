@@ -16,7 +16,7 @@ CREATE TABLE order_items(
     quantity INT NOT NULL CHECK (quantity > 0),
     price BIGINT NOT NULL CHECK (price > 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
+);
 
 CREATE INDEX idx_orders_user_id ON orders(user_id);
 CREATE INDEX idx_orders_status ON orders(status);
