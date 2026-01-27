@@ -20,9 +20,13 @@ func NewOrderService(orderRepo repository.OrderRepository) OrderService {
 	return &orderService{orderRepo: orderRepo}
 }
 
+var (
+	ErrInvalidRequest = errors.New("invalid request")
+)
+
 func (s *orderService) CreateOrder(ctx context.Context, userID string, items []model.OrderItem) (*model.Order, error) {
 	if userID == "" {
-		return nil, errors.New("user_id is required")
+		return nil, ErrInvalidRequest
 	}
 
 	order, err := model.NewOrder(userID, items)

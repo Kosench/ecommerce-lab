@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	dbURL := "postgres://user:pass@localhost:5432/orderdb?sslmode=disable"
+	dbURL := "postgres://postgres:postgres@localhost:5432/orderdb?sslmode=disable"
 	httpAddr := ":8080"
 
 	pool, err := pgxpool.New(context.Background(), dbURL)
@@ -32,7 +32,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /orders", orderHandler.CreateOrder)
 
-	server := http.Server{
+	server := &http.Server{
 		Addr:    httpAddr,
 		Handler: mux,
 	}
@@ -42,7 +42,7 @@ func main() {
 
 	go func() {
 		log.Printf("server starting on %s", httpAddr)
-		if err := server.ListenAndServe(); err != nil {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("server failed: %v", err)
 		}
 	}()
@@ -50,7 +50,7 @@ func main() {
 	<-done
 	log.Println("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {

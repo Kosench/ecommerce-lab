@@ -1,0 +1,15 @@
+# Dependencies
+vendor/
+
+# Binaries
+*.exe
+*.exe~
+
+# Logs
+*.log
+
+# Env
+.env
+
+# Docker
+postgres_data/
