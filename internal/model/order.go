@@ -21,7 +21,7 @@ type Order struct {
 	Status    OrderStatus
 	Total     int64
 	CreatedAt time.Time
-	UpdateAt  time.Time
+	UpdatedAt time.Time
 }
 
 type OrderItem struct {
@@ -63,6 +63,6 @@ func NewOrder(userID string, items []OrderItem) (*Order, error) {
 		Status:    StatusPending,
 		Total:     total,
 		CreatedAt: now,
-		UpdateAt:  now,
+		UpdatedAt: now,
 	}, nil
 }
