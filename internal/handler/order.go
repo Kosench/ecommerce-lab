@@ -4,21 +4,26 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
+	"time"
 
 	"github.com/Kosench/ecommerce-lab/internal/model"
 	"github.com/Kosench/ecommerce-lab/internal/repository"
 	"github.com/Kosench/ecommerce-lab/internal/service"
+	"github.com/Kosench/ecommerce-lab/platform/logger"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type OrderHandler struct {
 	orderService service.OrderService
+	logger       logger.Logger
 }
 
-func NewOrderHandler(orderService service.OrderService) *OrderHandler {
-	return &OrderHandler{orderService: orderService}
+func NewOrderHandler(orderService service.OrderService, logger logger.Logger) *OrderHandler {
+	return &OrderHandler{
+		orderService: orderService,
+		logger:       logger.With(zap.String("component", "handler"))}
 }
 
 type createOrderRequest struct {
@@ -44,22 +49,39 @@ func isValidUUID(s string) bool {
 }
 
 func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
 	var req createOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Warn("invalid request body",
+			zap.Error(err),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 		http.Error(w, `{"error": "invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 
 	if req.UserID == "" {
+		h.logger.Warn("missing user_id",
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 		http.Error(w, `{"error": "user_id is required"}`, http.StatusBadRequest)
 		return
 	}
 	if len(req.Items) == 0 {
+		h.logger.Warn("empty items",
+			zap.String("user_id", req.UserID),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 		http.Error(w, `{"error": "items are required"}`, http.StatusBadRequest)
 		return
 	}
 
 	if !isValidUUID(req.UserID) {
+		h.logger.Warn("invalid user_id format",
+			zap.String("user_id", req.UserID),
+			zap.String("remote_addr", r.RemoteAddr),
+		)
 		http.Error(w, `{"error": "user_id must be a valid UUID"}`, http.StatusBadRequest)
 		return
 	}
@@ -67,14 +89,26 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 	items := make([]model.OrderItem, len(req.Items))
 	for i, item := range req.Items {
 		if !isValidUUID(item.ProductID) {
+			h.logger.Warn("invalid product_id format",
+				zap.Int("item_index", i),
+				zap.String("product_id", item.ProductID),
+			)
 			http.Error(w, fmt.Sprintf(`{"error": "item[%d].product_id must be a valid UUID"}`, i), http.StatusBadRequest)
 			return
 		}
 		if item.Quantity <= 0 {
+			h.logger.Warn("invalid quantity",
+				zap.Int("item_index", i),
+				zap.Int("quantity", item.Quantity),
+			)
 			http.Error(w, fmt.Sprintf(`{"error": "item[%d].quantity must be positive"}`, i), http.StatusBadRequest)
 			return
 		}
 		if item.Price <= 0 {
+			h.logger.Warn("invalid price",
+				zap.Int("item_index", i),
+				zap.Int64("price", item.Price),
+			)
 			http.Error(w, fmt.Sprintf(`{"error": "item[%d].price must be positive"}`, i), http.StatusBadRequest)
 			return
 		}
@@ -88,7 +122,11 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.orderService.CreateOrder(r.Context(), req.UserID, items)
 	if err != nil {
-		log.Printf("ERROR creating order: %v", err)
+		h.logger.Error("failed to create order",
+			zap.Error(err),
+			zap.String("user_id", req.UserID),
+			zap.Int("items_count", len(items)),
+		)
 
 		if errors.Is(err, service.ErrInvalidRequest) ||
 			errors.Is(err, model.ErrEmptyUserID) ||
@@ -108,6 +146,15 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error": "internal server error"}`, http.StatusInternalServerError)
 		return
 	}
+
+	duration := time.Since(start)
+	h.logger.Info("order created successfully",
+		zap.String("order_id", order.ID),
+		zap.String("user_id", order.UserID),
+		zap.Int64("total", order.Total),
+		zap.Int("items_count", len(order.Items)),
+		zap.Duration("duration", duration),
+	)
 
 	resp := createOrderResponse{
 		ID:     order.ID,
