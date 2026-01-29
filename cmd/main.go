@@ -42,11 +42,30 @@ func main() {
 		zap.String("url", dbURL),
 	)
 
+	healthHandler := handler.NewHealthHandler(pool, logr)
+
+	readyCtx, readyCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer readyCancel()
+
+	if err := pool.Ping(readyCtx); err != nil {
+		logr.Fatal("database is not ready",
+			zap.Error(err),
+		)
+	}
+
+	logr.Info("database is ready")
+
 	orderRepo := repository.NewOrderRepository(pool, logr)
 	orderService := service.NewOrderService(orderRepo, logr)
 	orderHandler := handler.NewOrderHandler(orderService, logr)
 
 	mux := http.NewServeMux()
+
+	// Health endpoints
+	mux.HandleFunc("GET /health", healthHandler.Liveness)
+	mux.HandleFunc("GET /ready", healthHandler.Readiness)
+
+	// Business endpoints
 	mux.HandleFunc("POST /orders", orderHandler.CreateOrder)
 
 	server := &http.Server{
