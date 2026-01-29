@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Kosench/ecommerce-lab/internal/config"
 	"github.com/Kosench/ecommerce-lab/internal/handler"
 	"github.com/Kosench/ecommerce-lab/internal/repository"
 	"github.com/Kosench/ecommerce-lab/internal/service"
@@ -18,28 +19,37 @@ import (
 )
 
 func main() {
-	env := os.Getenv("ENV")
-	if env == "" {
-		env = "development"
-	}
+	cfg := config.MustLoad()
 
-	logr, err := logger.New(env)
+	logr, err := logger.New(cfg.Environment)
 	if err != nil {
 		log.Fatalf("failed to initialize logger: %v", err)
 	}
 	defer logr.(*logger.ZapLogger).Sync()
 
-	dbURL := "postgres://postgres:postgres@localhost:5432/orderdb?sslmode=disable"
-	httpAddr := ":8080"
-
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	poolConfig, err := pgxpool.ParseConfig(cfg.Database.URL)
 	if err != nil {
-		log.Fatalf("failed to connect to db: %v", err)
+		logr.Fatal("failed to parse database url",
+			zap.Error(err),
+		)
+	}
+
+	poolConfig.MaxConns = int32(cfg.Database.MaxOpenConns)
+	poolConfig.MinConns = int32(cfg.Database.MaxIdleConns)
+	poolConfig.MaxConnLifetime = cfg.Database.ConnMaxLifetime
+
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		logr.Fatal("failed to connect to db",
+			zap.Error(err),
+		)
 	}
 	defer pool.Close()
 
 	logr.Info("database connected",
-		zap.String("url", dbURL),
+		zap.String("url", cfg.Database.URL),
+		zap.Int("max_open_conns", cfg.Database.MaxOpenConns),
+		zap.Int("max_idle_conns", cfg.Database.MaxIdleConns),
 	)
 
 	healthHandler := handler.NewHealthHandler(pool, logr)
@@ -69,8 +79,10 @@ func main() {
 	mux.HandleFunc("POST /orders", orderHandler.CreateOrder)
 
 	server := &http.Server{
-		Addr:    httpAddr,
-		Handler: mux,
+		Addr:         cfg.Server.Addr,
+		Handler:      mux,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
 	}
 
 	done := make(chan os.Signal, 1)
@@ -78,7 +90,8 @@ func main() {
 
 	go func() {
 		logr.Info("server starting",
-			zap.String("addr", httpAddr),
+			zap.String("addr", cfg.Server.Addr),
+			zap.String("env", cfg.Environment),
 		)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logr.Fatal("server failed",
@@ -90,7 +103,7 @@ func main() {
 	<-done
 	logr.Info("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
