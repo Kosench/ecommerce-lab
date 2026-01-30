@@ -11,6 +11,7 @@ import (
 
 	"github.com/Kosench/ecommerce-lab/internal/config"
 	"github.com/Kosench/ecommerce-lab/internal/handler"
+	"github.com/Kosench/ecommerce-lab/internal/middleware/httpmw"
 	"github.com/Kosench/ecommerce-lab/internal/repository"
 	"github.com/Kosench/ecommerce-lab/internal/service"
 	"github.com/Kosench/ecommerce-lab/platform/logger"
@@ -78,9 +79,14 @@ func main() {
 	// Business endpoints
 	mux.HandleFunc("POST /orders", orderHandler.CreateOrder)
 
+	handlerWithMiddleware := httpmw.Recovery(
+		httpmw.Logging(mux, logr),
+		logr,
+	)
+
 	server := &http.Server{
 		Addr:         cfg.Server.Addr,
-		Handler:      mux,
+		Handler:      handlerWithMiddleware,
 		ReadTimeout:  cfg.Server.ReadTimeout,
 		WriteTimeout: cfg.Server.WriteTimeout,
 	}
